@@ -15,13 +15,14 @@ public class DisagreementFinderExperimentRunner extends ExperimentRunner {
 
 	@Override
 	protected Experiment prepare(String[] args) {
-		if (args.length != 3) {
+		if (args.length != 4) {
 			throw new RuntimeException(
-					"You need exactly three parameters: path to ontology, path to experiment csv, path to class hierachies");
+					"You need exactly four parameters: path to ontology, path to experiment csv, path to class hierachies, approach to normalisation.");
 		}
 		String ontology_path = args[0];
 		String csv_path = args[1];
 		String classhierarchydir_path = args[2];
+		String approach = args[3];
 		
 		this.setCSVFile(new File(csv_path));
 		this.setOntologyFile(new File(ontology_path));
@@ -31,7 +32,7 @@ public class DisagreementFinderExperimentRunner extends ExperimentRunner {
 		File diagreementoutdir = new File(getCSVFile().getParentFile(),"out");
 		diagreementoutdir.mkdir();
 
-		return new DisgreementFinderExperiment(getOntologyFile(), getCSVFile(), classhierarchydir, sj_csv, diagreementoutdir);
+		return new DisgreementFinderExperiment(getOntologyFile(), getCSVFile(), classhierarchydir, sj_csv, diagreementoutdir, approach);
 	}
 
 }

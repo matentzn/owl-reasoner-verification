@@ -9,11 +9,18 @@ import org.semanticweb.ore.wrappers.OREv2ReasonerWrapper;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.AxiomType;
 import org.semanticweb.owlapi.model.OWLAxiom;
+import org.semanticweb.owlapi.model.OWLDataFactory;
+import org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom;
 import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyCreationException;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.model.OWLOntologyStorageException;
+import org.semanticweb.owlapi.model.OWLSubClassOfAxiom;
+import org.semanticweb.owlapi.reasoner.InconsistentOntologyException;
+import org.semanticweb.owlapi.reasoner.InferenceType;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
+import org.semanticweb.owlapi.util.InferredEquivalentClassAxiomGenerator;
+import org.semanticweb.owlapi.util.InferredSubClassAxiomGenerator;
 import org.semanticweb.owlapi.util.Version;
 
 import owl.cs.man.ac.uk.experiment.classification.OntologyClassification;
@@ -22,12 +29,12 @@ import owl.cs.man.ac.uk.experiment.experiment.ReasonerExperiment;
 
 public class GenerateInfClassHierarchyExperiment extends ReasonerExperiment {
 
-	private File inferred_hierarchy;
-
+	private String approach;
 	public GenerateInfClassHierarchyExperiment(File ontfile, File csvfile, File inferred_hierachy, String reasonername,
-			int reasoner_timeout) {
+			int reasoner_timeout, String approach) {
 		super(ontfile, csvfile, inferred_hierachy, reasonername, reasoner_timeout);
 		// TODO Auto-generated constructor stub
+		this.approach = approach;
 	}
 
 	@Override
@@ -37,25 +44,26 @@ public class GenerateInfClassHierarchyExperiment extends ReasonerExperiment {
 		long startload = System.nanoTime();
 		OWLOntology o = manager.loadOntologyFromOntologyDocument(getOntologyFile());
 		long endload = System.nanoTime();
-		OREv2ReasonerWrapper reasonerWrapper = new OREv2ReasonerWrapper(o, getReasonerName(), "error_log_" + getReasonerName() + "_" + System.currentTimeMillis());
-		Set<OWLAxiom> inf_ch = reasonerWrapper.classify();
-		ClassHierarchyNormaliser chn = new ClassHierarchyNormaliser();
-		OWLOntology normalised = chn.loadClassificationResultDataIntoOntology(manager.createOntology(inf_ch));
-		Set<OWLAxiom> results = new HashSet<OWLAxiom>();
-		for(OWLAxiom ax:normalised.getAxioms())
-		{
-			if(ax.isOfType(AxiomType.SUBCLASS_OF) || ax.isOfType(AxiomType.EQUIVALENT_CLASSES))
-			{
-				results.add(ax);
-			}
-		}
-		reasonerWrapper.serializeOntologyResults(results, manager, inferred_hierarchy.getAbsolutePath());
+		long start = System.currentTimeMillis();
+	
+		OWLReasoner reasoner = createReasoner(o);
+		try {
+			reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY);
+			
+		} catch (InconsistentOntologyException e) {		
+			e.printStackTrace();
+		} 		
+		long end = System.currentTimeMillis();
+		//Data collection
+		
+		addResult("normaliser", "" + approach);
+		addResult("ontology_loading_time", "" + (endload - startload));
+		addResult("classification_time", "" + (end - start));
 	}
 
 	@Override
 	protected Version getExperimentVersion() {
-		// TODO Auto-generated method stub
-		return null;
+		return new Version(1, 0, 0, 1);
 	}
 
 	@Override
@@ -63,10 +71,37 @@ public class GenerateInfClassHierarchyExperiment extends ReasonerExperiment {
 			throws OWLOntologyCreationException, FileNotFoundException,
 			OWLOntologyStorageException {
 		if (isExportInferredHierarchy()) {
+			OWLOntology out;
 			File infhier = new File(getInferredHierachyDir(), prefix
 					+ getOntologyFile().getName());
-			OWLOntology inf = OntologyClassification.getInferredHierarchy(manager, r, o);
-			OntologySerialiser.saveOWLXML(infhier.getParentFile(), inf,
+			Set<OWLAxiom> resultAxioms = new HashSet<OWLAxiom>();
+			long normstart = System.currentTimeMillis();
+			if(!r.isConsistent()) {
+				OWLDataFactory factory = manager.getOWLDataFactory();
+				resultAxioms.add(factory.getOWLSubClassOfAxiom(factory.getOWLThing(), factory.getOWLNothing()));
+				out = OWLManager.createOWLOntologyManager().createOntology(resultAxioms);
+				
+			}
+			else if (approach.equals("ore")) {
+				InferredSubClassAxiomGenerator subClassGenerator = new InferredSubClassAxiomGenerator();
+				InferredEquivalentClassAxiomGenerator equivClassGenerator = new InferredEquivalentClassAxiomGenerator();
+				Set<OWLSubClassOfAxiom> subClassAxioms = subClassGenerator.createAxioms(manager, r);
+				Set<OWLEquivalentClassesAxiom> equivClassAxioms = equivClassGenerator.createAxioms(manager, r);
+				resultAxioms.addAll(subClassAxioms);
+				resultAxioms.addAll(equivClassAxioms);
+				OWLOntology inf = OWLManager.createOWLOntologyManager().createOntology(resultAxioms);
+				ClassHierarchyNormaliser chn = new ClassHierarchyNormaliser();
+				out = chn.loadClassificationResultDataIntoOntology(inf);
+			}
+			else if (approach.equals("bails")) {
+				out = OntologyClassification.getInferredHierarchy(manager, r, o);
+			}
+			else {
+				return;
+			}
+			long normend = System.currentTimeMillis();
+			addResult("normalisation_time", "" + (normend - normstart));
+			OntologySerialiser.saveOWLXML(infhier.getParentFile(), out,
 					infhier.getName(), manager);
 		}
 	}
