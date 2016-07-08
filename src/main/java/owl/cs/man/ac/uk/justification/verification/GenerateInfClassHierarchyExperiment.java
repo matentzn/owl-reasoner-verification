@@ -55,7 +55,7 @@ public class GenerateInfClassHierarchyExperiment extends ReasonerExperiment {
 		} 		
 		long end = System.currentTimeMillis();
 		//Data collection
-		
+		exportInferredHierarchy(manager, reasoner, o);
 		addResult("normaliser", "" + approach);
 		addResult("ontology_loading_time", "" + (endload - startload));
 		addResult("classification_time", "" + (end - start));
