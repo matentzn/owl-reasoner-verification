@@ -26,13 +26,12 @@ public class DisagreementFinderExperimentRunner extends ExperimentRunner {
 		
 		this.setCSVFile(new File(csv_path));
 		this.setOntologyFile(new File(ontology_path));
-		File sj_csv = new File(getCSVFile().getParentFile(),getOntologyFile().getName()+"_sj_verdicts.csv");
-		sj_csv.setWritable(true);
+		File sj_dir = new File(getCSVFile().getParentFile(),"sj_out");
 		File classhierarchydir = new File(classhierarchydir_path);
 		File diagreementoutdir = new File(getCSVFile().getParentFile(),"out");
 		diagreementoutdir.mkdir();
-
-		return new DisgreementFinderExperiment(getOntologyFile(), getCSVFile(), classhierarchydir, sj_csv, diagreementoutdir, approach);
+		sj_dir.mkdir();
+		return new DisgreementFinderExperiment(getOntologyFile(), getCSVFile(), classhierarchydir, sj_dir, diagreementoutdir, approach);
 	}
 
 }

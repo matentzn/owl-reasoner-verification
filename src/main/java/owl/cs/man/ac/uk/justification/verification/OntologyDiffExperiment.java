@@ -20,7 +20,7 @@ public class OntologyDiffExperiment extends Experiment {
 	public OntologyDiffExperiment(File original, String savePath, File ontfile1, String compid) {
 		super(original, new File(savePath));
 		this.ontfile1 = ontfile1;
-		this.exportDir = new File(savePath);
+		this.exportDir = new File(savePath).getParentFile();
 		this.compid = compid;
 	}
 

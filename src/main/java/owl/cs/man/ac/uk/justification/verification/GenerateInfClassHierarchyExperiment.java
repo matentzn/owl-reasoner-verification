@@ -5,9 +5,7 @@ import java.io.FileNotFoundException;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.semanticweb.ore.wrappers.OREv2ReasonerWrapper;
 import org.semanticweb.owlapi.apibinding.OWLManager;
-import org.semanticweb.owlapi.model.AxiomType;
 import org.semanticweb.owlapi.model.OWLAxiom;
 import org.semanticweb.owlapi.model.OWLDataFactory;
 import org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom;
@@ -40,25 +38,33 @@ public class GenerateInfClassHierarchyExperiment extends ReasonerExperiment {
 	@Override
 	protected void process() throws Exception {
 		// TODO Auto-generated method stub
+		System.out.println("Reasoner: " + getReasonerName());
 		OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
 		long startload = System.nanoTime();
 		OWLOntology o = manager.loadOntologyFromOntologyDocument(getOntologyFile());
 		long endload = System.nanoTime();
 		long start = System.currentTimeMillis();
-	
+		System.out.println("Classification...");
+		Boolean consistent = true;
 		OWLReasoner reasoner = createReasoner(o);
 		try {
 			reasoner.precomputeInferences(InferenceType.CLASS_HIERARCHY);
-			
+			System.out.println("...finished classification");
+			consistent = reasoner.isConsistent();
 		} catch (InconsistentOntologyException e) {		
 			e.printStackTrace();
+			consistent = false;
 		} 		
 		long end = System.currentTimeMillis();
 		//Data collection
+		System.out.println("Exporting...");
 		exportInferredHierarchy(manager, reasoner, o);
+		System.out.println("...finished exporting.");
 		addResult("normaliser", "" + approach);
 		addResult("ontology_loading_time", "" + (endload - startload));
 		addResult("classification_time", "" + (end - start));
+		addResult("consistent","" + consistent);
+		addResult("asserted_size","" + o.getAxiomCount());
 	}
 
 	@Override
@@ -75,6 +81,7 @@ public class GenerateInfClassHierarchyExperiment extends ReasonerExperiment {
 			File infhier = new File(getInferredHierachyDir(), prefix
 					+ getOntologyFile().getName());
 			Set<OWLAxiom> resultAxioms = new HashSet<OWLAxiom>();
+			System.out.println("Normalising with method " + approach + "...");
 			long normstart = System.currentTimeMillis();
 			if(!r.isConsistent()) {
 				OWLDataFactory factory = manager.getOWLDataFactory();
@@ -100,7 +107,9 @@ public class GenerateInfClassHierarchyExperiment extends ReasonerExperiment {
 				return;
 			}
 			long normend = System.currentTimeMillis();
+			System.out.println("...finished normalisation.");
 			addResult("normalisation_time", "" + (normend - normstart));
+			addResult("inferred_size","" + resultAxioms.size());
 			OntologySerialiser.saveOWLXML(infhier.getParentFile(), out,
 					infhier.getName(), manager);
 		}
