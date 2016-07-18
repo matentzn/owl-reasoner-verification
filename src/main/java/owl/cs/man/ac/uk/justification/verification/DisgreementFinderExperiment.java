@@ -25,11 +25,13 @@ import org.semanticweb.owlapi.model.OWLOntologyManager;
 import org.semanticweb.owlapi.model.OWLOntologyStorageException;
 import org.semanticweb.owlapi.model.OWLSubClassOfAxiom;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
+import org.semanticweb.owlapi.reasoner.SimpleConfiguration;
 import org.semanticweb.owlapi.util.Version;
 
 import owl.cs.man.ac.uk.experiment.classification.OntologyClassification;
 import owl.cs.man.ac.uk.experiment.csv.CSVUtilities;
 import owl.cs.man.ac.uk.experiment.experiment.Experiment;
+import owl.cs.man.ac.uk.experiment.ontology.TautologyChecker;
 
 public class DisgreementFinderExperiment extends Experiment {
 
@@ -39,16 +41,18 @@ public class DisgreementFinderExperiment extends Experiment {
 	private File disagreementoutdir;
 	private File sjoutdir;
 	private String approach;
+	private long reasoner_time;
 	private List<Map<String, String>> csv = new ArrayList<Map<String, String>>();
 	public static IRI ASSERTION_ANNOTATION_PROPERTY_IRI = IRI.create("http://owl.cs.manchester.ac.uk/reasoner_verification/vocabulary#asserted_in");
 
 	public DisgreementFinderExperiment(File ontfile, File csvfile, File classhierarchydirf, File sjoutdir,
-			File disagreementoutdir,  String approach) {
+			File disagreementoutdir,  String approach, long reasoner_time) {
 		super(ontfile, csvfile);
 		this.ontoman = OWLManager.createOWLOntologyManager();
 		this.disagreementoutdir = disagreementoutdir;
 		this.sjoutdir = sjoutdir;
 		this.approach = approach;
+		this.reasoner_time = reasoner_time;
 		try {
 			this.ontology = ontoman.loadOntologyFromOntologyDocument(getOntologyFile());
 			String oname = getOntologyFile().getName();
@@ -104,6 +108,14 @@ public class DisgreementFinderExperiment extends Experiment {
 			}
 		}
 		unionSet.removeAll(differenceSet);
+		try {
+			Set<OWLAxiom> delSet = TautologyChecker.getTautologies(unionSet);
+			unionSet.removeAll(delSet);
+		} catch (OWLOntologyCreationException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 		Set<OWLAxiom> selfjust = this.getAssertedAxioms(original, unionSet);
 		System.out.println("Removing all self-justifications...");
 		unionSet.removeAll(selfjust);
@@ -117,6 +129,8 @@ public class DisgreementFinderExperiment extends Experiment {
 		addResult("normaliser", "" + approach);
 		return this.getAssertedList(collection, selfjust);
 	}
+
+	
 
 	// Removes any funky ontologies (empties, broken)
 	// Will produce a flag to be caught
@@ -177,7 +191,7 @@ public class DisgreementFinderExperiment extends Experiment {
 				selfjust.add(ax);
 			}
 		}
-		return this.filter(selfjust);
+		return selfjust;
 	}
 
 	// Loads ontology from file, gets axioms then removes ontology.
@@ -196,7 +210,7 @@ public class DisgreementFinderExperiment extends Experiment {
 				loaderConfig.setMissingImportHandlingStrategy(MissingImportHandlingStrategy.SILENT);
 				OWLOntology onto = manager.loadOntologyFromOntologyDocument((new FileDocumentSource(file)),
 						loaderConfig);
-				OWLReasoner r = new Reasoner.ReasonerFactory().createReasoner(onto);
+				OWLReasoner r = new Reasoner.ReasonerFactory().createReasoner(onto,new SimpleConfiguration(reasoner_time));
 				boolean consistent = r.isConsistent();
 				if (approach.equals("ore")) {
 					if (consistent) {
@@ -218,8 +232,8 @@ public class DisgreementFinderExperiment extends Experiment {
 						returnSet.addAll(onto.getAxioms());
 					}
 				}
-				rowcsv.put("consistent", consistent + "");
-				rowcsv.put("inf_ch_size", "" + returnSet.size());
+				//rowcsv.put("consistent", consistent + "");
+				//rowcsv.put("inf_ch_size", "" + returnSet.size());
 				ontoman.removeOntology(onto);
 			}
 		} catch (OWLOntologyCreationException e) {
@@ -227,29 +241,7 @@ public class DisgreementFinderExperiment extends Experiment {
 			e.printStackTrace();
 		}
 		csv.add(rowcsv);
-		return this.filter(returnSet);
-	}
-
-	// Filtering of axioms - remove declarations and tautologies. At the moment
-	// tautologies are
-	// just defined w.r.t classification. Later versions will require something
-	// more complex.
-	private Set<OWLAxiom> filter(Set<OWLAxiom> cleanSet) {
-		Set<OWLAxiom> filter = new HashSet<OWLAxiom>();
-		for (OWLAxiom ax : cleanSet) {
-			if (ax.isOfType(AxiomType.DECLARATION)) {
-				filter.add(ax);
-			} else {
-				// Sanity check
-				if (ax.isOfType(AxiomType.SUBCLASS_OF)) {
-					if (this.isTautology((OWLSubClassOfAxiom) ax)) {
-						filter.add(ax);
-					}
-				}
-			}
-		}
-		cleanSet.removeAll(filter);
-		return cleanSet;
+		return returnSet;
 	}
 
 	private void saveDifferences(Set<OWLAxiom> differences, Map<OWLAxiom,Set<OWLAnnotation>> map, String savePath) {
@@ -271,10 +263,6 @@ public class DisgreementFinderExperiment extends Experiment {
 			System.out.println("Failed to create OWLOntology on difference set.");
 			e.printStackTrace();
 		}
-	}
-
-	private Boolean isTautology(OWLSubClassOfAxiom ax) {
-		return ax.getSubClass().isOWLNothing() || ax.getSuperClass().isOWLThing();
 	}
 
 	@Override

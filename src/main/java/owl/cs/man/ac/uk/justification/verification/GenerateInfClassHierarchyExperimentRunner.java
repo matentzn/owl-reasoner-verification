@@ -28,6 +28,7 @@ public  class GenerateInfClassHierarchyExperimentRunner extends ExperimentRunner
 		String approach = args[5];
 		
 		int reasoner_time = Integer.valueOf(reasoner_timeout);
+		setProcessTimeout(5000 + (reasoner_time));
 		setCSVFile(new File(csv_path));
 		setOntologyFile(new File(ontology_path));
 		File inf_dir = new File(inf_dir_path);
