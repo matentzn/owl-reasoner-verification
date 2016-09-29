@@ -11,6 +11,7 @@ import java.util.Set;
 import org.semanticweb.HermiT.Reasoner;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.io.FileDocumentSource;
+import org.semanticweb.owlapi.io.OWLXMLOntologyFormat;
 import org.semanticweb.owlapi.model.AxiomType;
 import org.semanticweb.owlapi.model.IRI;
 import org.semanticweb.owlapi.model.MissingImportHandlingStrategy;
@@ -42,7 +43,7 @@ public class DisgreementFinderExperiment extends Experiment {
 	private File sjoutdir;
 	private String approach;
 	private long reasoner_time;
-	private List<Map<String, String>> csv = new ArrayList<Map<String, String>>();
+	private List<Map<String,String>> ent_data = new ArrayList<Map<String,String>>();
 	public static IRI ASSERTION_ANNOTATION_PROPERTY_IRI = IRI.create("http://owl.cs.manchester.ac.uk/reasoner_verification/vocabulary#asserted_in");
 
 	public DisgreementFinderExperiment(File ontfile, File csvfile, File classhierarchydirf, File sjoutdir,
@@ -85,8 +86,8 @@ public class DisgreementFinderExperiment extends Experiment {
 		this.saveDifferences(sjanno.keySet(), sjanno, new File(sjoutdir, getOntologyFile().getName() + "_sjdisagreements.owl").getAbsolutePath());
 		long end = System.nanoTime();
 		addResult("disagreement_finder_time", "" + (end - start));
-		CSVUtilities.writeCSVData(new File(getCSVFile().getParent(), getOntologyFile().getName() + "_disagreement.csv"),
-				csv, false);
+		CSVUtilities.writeCSVData(new File(getCSVFile().getParent(), "entailments.csv"),
+				ent_data, false);
 	}
 
 	public Map<OWLAxiom,ArrayList<String>> getDifferences(ArrayList<String> fileList, String savePath, OWLOntology original) {
@@ -102,6 +103,7 @@ public class DisgreementFinderExperiment extends Experiment {
 			Set<OWLAxiom> returnSet = this.getAxioms(new File(path));
 			unionSet.addAll(returnSet);
 			// If returnSet is empty, an error occured. We skip this.
+			System.out.println(returnSet);
 			if (!returnSet.isEmpty()) {
 				differenceSet.retainAll(returnSet);
 				collection.put(path.substring(path.lastIndexOf("/") + 1), returnSet);
@@ -157,8 +159,9 @@ public class DisgreementFinderExperiment extends Experiment {
 					yay.add(s);
 				}
 			}
-			details.put(ax, yay);			
+			details.put(ax, yay);
 		}
+		
 		return details;
 	}
 
@@ -172,7 +175,12 @@ public class DisgreementFinderExperiment extends Experiment {
 			Set<OWLAnnotation> returnSet = new HashSet<OWLAnnotation>();
 			for(String s:assertionList.get(ax))
 			{
+				Map<String,String> data = new HashMap<String,String>();
 				returnSet.add(df.getOWLAnnotation(ap, df.getOWLLiteral(s)));
+				data.put("entailment",ax.toString());
+				data.put("o",getOntologyFile().getName());
+				data.put("inf_class_hir_file",s);
+				ent_data.add(data);
 			}
 			annoMap.put(ax, returnSet);
 		}
@@ -201,8 +209,6 @@ public class DisgreementFinderExperiment extends Experiment {
 	private Set<OWLAxiom> getAxioms(File file) {
 		OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
 		Set<OWLAxiom> returnSet = new HashSet<OWLAxiom>();
-		Map<String, String> rowcsv = new HashMap<String, String>();
-		rowcsv.put("filename", ""+ file.getPath().substring(file.getPath().lastIndexOf("/") + 1));
 		try {
 			if (file.exists() && file.length() != 0) {
 				OWLOntologyLoaderConfiguration loaderConfig = new OWLOntologyLoaderConfiguration();
@@ -213,7 +219,7 @@ public class DisgreementFinderExperiment extends Experiment {
 				OWLReasoner r = new Reasoner.ReasonerFactory().createReasoner(onto,new SimpleConfiguration(reasoner_time));
 				boolean consistent = r.isConsistent();
 				if (approach.equals("ore")) {
-					if (consistent) {
+					if (consistent && !onto.getAxioms().isEmpty()) {
 						ClassHierarchyNormaliser chn = new ClassHierarchyNormaliser();
 						returnSet.addAll(chn.loadClassificationResultDataIntoOntology(onto).getAxioms());
 					}
@@ -240,7 +246,6 @@ public class DisgreementFinderExperiment extends Experiment {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		csv.add(rowcsv);
 		return returnSet;
 	}
 
@@ -251,10 +256,11 @@ public class DisgreementFinderExperiment extends Experiment {
 			for(OWLAxiom ax:differences)
 			{
 				manager.addAxiom(diffOntology, ax.getAnnotatedAxiom(map.get(ax)));
+				manager.removeAxiom(diffOntology,ax);
 			}
 			File saveFile = new File(savePath);
 			try {
-				manager.saveOntology(diffOntology, IRI.create(saveFile));
+				manager.saveOntology(diffOntology, new OWLXMLOntologyFormat() ,IRI.create(saveFile));
 			} catch (OWLOntologyStorageException e) {
 				System.out.println("Failed to save OWLOntology at " + savePath);
 				e.printStackTrace();

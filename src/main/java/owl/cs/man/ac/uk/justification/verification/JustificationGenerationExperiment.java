@@ -46,7 +46,11 @@ public class JustificationGenerationExperiment extends ReasonerExperiment{
 	private File just_out;
 	private File disagreements;
 	private List<Map<String,String>> just_data = new ArrayList<Map<String,String>>();
+	private List<Map<String,String>> ent_data = new ArrayList<Map<String,String>>();
+	private List<Map<String,String>> ent_no_gen_data = new ArrayList<Map<String,String>>();
 	private File csv_just;
+	private File csv_ent;
+	File csv_no_gen;
 	public static IRI ENTAILMENT_ANNOTATION_PROPERTY_IRI = IRI.create("http://owl.cs.manchester.ac.uk/reasoner_verification/vocabulary#entailment");
 	public static IRI REASONER_ANNOTATION_PROPERTY_IRI = IRI.create("http://owl.cs.manchester.ac.uk/reasoner_verification/vocabulary#reasoner");
 	public static IRI REASONERJAR_ANNOTATION_PROPERTY_IRI = IRI.create("http://owl.cs.manchester.ac.uk/reasoner_verification/vocabulary#reasoner_version");
@@ -59,6 +63,8 @@ public class JustificationGenerationExperiment extends ReasonerExperiment{
 		this.just_out = justPath;
 		this.disagreements = disagreements;
 		this.csv_just = new File(csv.getParentFile(),"just_"+reasoner+"_"+ontology.getName()+"_"+csv.getName());
+		this.csv_ent = new File(csv.getParentFile(),"ent_"+reasoner+"_"+ontology.getName()+"_"+csv.getName());
+		this.csv_no_gen = new File(csv.getParentFile(),"ent_no_gen_"+reasoner+"_"+ontology.getName()+"_"+csv.getName());
 	}
 
 	@Override
@@ -126,7 +132,14 @@ public class JustificationGenerationExperiment extends ReasonerExperiment{
 				//Adds annotation for relevant entailment axiom. Based off Sam and Matt's standards
 				
 				//OWLAnnotationProperty entailmentAnnotationProperty = df.getOWLAnnotationProperty(ENTAILMENT_ANNOTATION_PROPERTY_IRI);
-				
+				if(expl_analysis.isEmpty()){
+					Map<String,String> no_gen_data = new HashMap<String,String>();
+					no_gen_data.put("entailment",entailmentstr);
+					no_gen_data.put("reasoner",getReasonerName());
+					no_gen_data.put("ontology",getOntologyFile().getName());
+					ent_no_gen_data.add(no_gen_data);
+				}
+								
 				for (Explanation<OWLAxiom> explanation : expl_analysis) {
 					Map<String,String> data = new HashMap<String,String>();
 					String justname = "just_" + getOntologyFile().getName() 
@@ -142,10 +155,14 @@ public class JustificationGenerationExperiment extends ReasonerExperiment{
 			                df.getOWLLiteral("This is the superclass of the entailment that follows from this justification.", "en"));
 					OWLAxiom ax1 = df.getOWLAnnotationAssertionAxiom((OWLAnnotationSubject) subcl.getIRI(), commentSub);
 					OWLAxiom ax2 = df.getOWLAnnotationAssertionAxiom((OWLAnnotationSubject) supcl.getIRI(), commentSup);
+					OWLAxiom ax3 = df.getOWLDeclarationAxiom(subcl);
+					OWLAxiom ax4 = df.getOWLDeclarationAxiom(supcl);
 					//OWLAnnotation entailmentAnnotation = df.getOWLAnnotation(entailmentAnnotationProperty, df.getOWLLiteral(entailment.toString()));
 					OWLOntology justo = manager.createOntology(just);
 					manager.applyChange(new AddAxiom(justo,ax1));
 					manager.applyChange(new AddAxiom(justo,ax2));
+					manager.applyChange(new AddAxiom(justo,ax3));
+					manager.applyChange(new AddAxiom(justo,ax4));
 					//manager.applyChange(new AddOntologyAnnotation(justo,entailmentAnnotation));
 					manager.applyChange(new AddOntologyAnnotation(justo,reasonerAnnotation));
 					manager.applyChange(new AddOntologyAnnotation(justo,genontologyAnnotation));
@@ -164,7 +181,12 @@ public class JustificationGenerationExperiment extends ReasonerExperiment{
 					data.put("size","" + just.size());
 					just_data.add(data);
 				}
-				
+				Map<String,String> d = new HashMap<String,String>();
+				d.put("entailment",entailment.getAxiomWithoutAnnotations().toString());
+				d.put("hashcode","" + entailment.hashCode());
+				d.put("ontology",getOntologyFile().getName());
+				d.put("just_count","" + expl_analysis.size());
+				ent_data.add(d);
 		}
 		long generationend = System.nanoTime();
 		//Data gathering
@@ -173,6 +195,8 @@ public class JustificationGenerationExperiment extends ReasonerExperiment{
 		addResult("disagreement_load_time","" + (disagreementend - disagreementrender));
 		addResult("generation_time",""+(generationend - generationstart));
 		CSVUtilities.writeCSVData(csv_just, just_data, false);
+		CSVUtilities.writeCSVData(csv_ent, ent_data, false);
+		CSVUtilities.writeCSVData(csv_no_gen, ent_no_gen_data, false);
 	}
 
 	@Override
